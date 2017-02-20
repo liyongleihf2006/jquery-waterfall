@@ -23,6 +23,13 @@
             background-color: beige;
             text-align: center;
         }
+        .close{
+            float: right;
+            cursor: pointer;
+        }
+        .close:hover{
+            color: #cccccc;
+        }
     </style>
     <div id="scorllContainer" class="scrollContainer">
         <div id="container" class="waterfall">
@@ -32,11 +39,21 @@
 
     <script>
         var generateItemFn=function(resolve,reject){
+            var _this=this;
+            /*曾经添加到瀑布流中的元素的总和,后来被删除掉的也算*/
+            var idx=this.waterfallItemsOriginLength;
             var item=document.createElement("div");
             item.classList.add("preItem");
             var no=document.createElement("div");
-            no.innerText=this.waterfallItems.length;
+            no.innerText=idx;
             item.appendChild(no);
+            var close=document.createElement("span");
+            close.classList.add("close");
+            close.innerText="X";
+            close.addEventListener("click",function(){
+                _this.removeWaterfall(item);
+            });
+            no.appendChild(close);
             var image=document.createElement("img");
             image.src="http://cued.xunlei.com/demos/publ/img/"+"P_"
                     +(1000+this.waterfallItems.length+"").slice(1)

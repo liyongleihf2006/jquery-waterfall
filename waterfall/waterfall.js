@@ -4,6 +4,7 @@
  * 1.支持任意设置瀑布流元素的任意样式
  * 2.支持屏幕大小缩放重新计算
  * 3.支持异步添加瀑布流元素
+ * 4.支持删除瀑布流中的元素后自动填充空白
  * params:
  *      container: string or dom;指定瀑布流元素的容器
  *      option:{
@@ -16,6 +17,12 @@
  *      resolve,reject是内置$.Deferred实例的两个参数;resolve为解决,reject为拒绝;
  *      当要向瀑布流中添加元素item的时候请调用resolve(item);
  *      当终止瀑布流中添加元素的时候请调用reject(msg),msg是string类型的任意字符串,用来说明为什么终止添加元素
+ * ******************************
+ * Waterfall.prototype.removeWaterfall(item):
+ * 删除瀑布流中的某个瀑布流元素
+ * params:
+ *      item: dom;瀑布流中的某元素,如果item拥有.waterfall-item则直接删除当前元素,
+ *            如果item没有.waterfall-item则删除该元素的拥有.waterfall-item的祖先元素
  * ******************************
  * 不支持ie浏览器...
  */
@@ -43,17 +50,34 @@ function Waterfall(container,option){
         this.scrollContainer=document.querySelector(this.scrollContainer);
     }
     this.waterfallItems=[];
-    this.calculationColumn().then(function(){
-        _this.generateColumn();
-        _this.initGenerateItem();
+    /*曾经插入到瀑布流中的元素数量*/
+    this.waterfallItemsOriginLength=0;
+    this.isShouldAdd=true;
+    this.__calculationColumn().then(function(){
+        _this.__generateColumn();
+        _this.__initGenerateItem();
     });
-    this.scrollGenerateItem();
-    this.resize();
+    this.__scrollGenerateItem();
+    this.__resize();
+}
+Waterfall.prototype.removeWaterfall=function(item){
+    var waterfall=closest(item,"waterfall-item");
+    var idx=this.waterfallItems.indexOf(waterfall);
+    waterfall.parentNode.removeChild(waterfall);
+    this.waterfallItems.splice(idx,1);
+    this.__addWaterfall();
+    function closest(item,clazz){
+        if(item.classList.contains(clazz)){
+            return item;
+        }else{
+            return closest(item.parentNode,clazz);
+        }
+    }
 };
 /*
  * 浏览器大小改变时候重新渲染
  * */
-Waterfall.prototype.resize=function(){
+Waterfall.prototype.__resize=function(){
     var _this=this,
         container=this.container,
         cols,
@@ -71,8 +95,8 @@ Waterfall.prototype.resize=function(){
                 return totalWidth+current.clientWidth;
             },0)>=parseFloat(_this.columnWidth));
         if(resize){
-            _this.calculationColumn().then(function(){
-                _this.generateColumn();
+            _this.__calculationColumn().then(function(){
+                _this.__generateColumn();
                 cols=Array.prototype.slice.call(_this.container.children);
                 generateWaterfallItem();
                 function generateWaterfallItem(){
@@ -86,7 +110,7 @@ Waterfall.prototype.resize=function(){
                         return privous.clientHeight>current.clientHeight?current:privous;
                     }).appendChild(waterfallItems[waterfallItemIdx]);
                     generateWaterfallItem();
-                };
+                }
                 if(_this.currentItem){
                     _this.currentItem.scrollIntoView(true);
                 }
@@ -95,38 +119,39 @@ Waterfall.prototype.resize=function(){
             })
         }
     });
-}
+};
 /*
  * 滚动加载瀑布流元素
  * */
-Waterfall.prototype.scrollGenerateItem=function(){
-    var _this=this,
-        cols,
-        scrollContainer=this.scrollContainer,
-        currentRow,
-        promise,
-        isShouldAdd=false;
+Waterfall.prototype.__scrollGenerateItem=function(){
+    var _this=this,scrollContainer=this.scrollContainer;
     (scrollContainer === document.documentElement?window:scrollContainer).addEventListener("scroll",function(){
-        _this.currentItem=[].filter.call(_this.waterfallItems,function(item){
-            return item.offsetTop>(scrollContainer.scrollTop||document.body.scrollTop);
-        })[0];
-        if(promise&&!isShouldAdd){
-            return;
-        }else{
-            isShouldAdd=false;
-        }
-        addWaterfall();
+        _this.__addWaterfall();
     });
+
+};
+Waterfall.prototype.__addWaterfall=function(){
+    var _this=this,
+        scrollContainer=this.scrollContainer;
+    _this.currentItem=[].filter.call(_this.waterfallItems,function(item){
+        return item.offsetTop>(scrollContainer.scrollTop||document.body.scrollTop);
+    })[0];
+    if(!_this.isShouldAdd){
+        return;
+    }else{
+        _this.isShouldAdd=false;
+    }
+    addWaterfall();
     function addWaterfall(){
-        cols=Array.prototype.slice.call(_this.container.children);
-        currentRow=cols.reduce(function(privous,current){
+        var cols=Array.prototype.slice.call(_this.container.children);
+        var currentRow=cols.reduce(function(privous,current){
             return privous.clientHeight>current.clientHeight?current:privous;
         });
         if(currentRow.offsetTop+currentRow.clientHeight>(scrollContainer.scrollTop||document.body.scrollTop) + (scrollContainer.innerHeight || document.documentElement.clientHeight)+100){
-            isShouldAdd=true;
+            _this.isShouldAdd=true;
             return;
-        };
-        promise= $.Deferred();
+        }
+        var promise= $.Deferred();
         _this.generateItemFn(promise.resolve,promise.reject);
         promise.then(function(item){
             var waterfall=document.createElement("div");
@@ -134,16 +159,17 @@ Waterfall.prototype.scrollGenerateItem=function(){
             waterfall.appendChild(item);
             _this.waterfallItems.push(waterfall);
             currentRow.appendChild(waterfall);
+            _this.waterfallItemsOriginLength++;
             addWaterfall();
         },function(msg){
             console.log(msg);
         });
     }
-}
+};
 /*
  * 生成每个瀑布流元素
  * */
-Waterfall.prototype.initGenerateItem=function(){
+Waterfall.prototype.__initGenerateItem=function(){
     var _this=this,
         scrollContainer=this.scrollContainer,
         cols=Array.prototype.slice.call(this.container.children),
@@ -167,18 +193,19 @@ Waterfall.prototype.initGenerateItem=function(){
             waterfall.appendChild(item);
             _this.waterfallItems.push(waterfall);
             currentPushRow.appendChild(waterfall);
+            _this.waterfallItemsOriginLength++;
             initGenerateWaterfallItem();
         },function(msg){
             console.log(msg);
         })
-    };
-}
+    }
+};
 /*
  * 生成列
  * */
-Waterfall.prototype.generateColumn=function(){
+Waterfall.prototype.__generateColumn=function(){
     var i,children=this.container.children,cols=document.createDocumentFragment(),col;
-    for(var i=children.length-1;i>=0;i--){
+    for(i=children.length-1;i>=0;i--){
         this.container.removeChild(children[i]);
     }
     for(i=0;i<this.columnCount;i++){
@@ -188,11 +215,11 @@ Waterfall.prototype.generateColumn=function(){
         cols.appendChild(col);
     }
     this.container.appendChild(cols);
-}
+};
 /*
  * 计算列数以及每列的宽度
  * */
-Waterfall.prototype.calculationColumn=function(){
+Waterfall.prototype.__calculationColumn=function(){
     var _this=this,promise;
     promise= $.Deferred();
     if(!_this.columnWidth){
@@ -217,4 +244,4 @@ Waterfall.prototype.calculationColumn=function(){
         promise.resolve();
     }
     return promise;
-}
+};
