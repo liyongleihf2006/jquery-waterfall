@@ -230,7 +230,6 @@ Waterfall.prototype.__calculationColumn=function(){
             columnWidthToolRow.classList.add("waterfall-column");
             columnWidhtToolItem.classList.add("waterfall-item");
             columnWidthToolRow.appendChild(columnWidhtToolItem);
-            item.classList.add("waterfall-item");
             item.style.opacity=0;
             columnWidhtToolItem.appendChild(item);
             _this.columnCount=Math.floor(_this.container.getBoundingClientRect().width/columnWidthToolRow.getBoundingClientRect().width);
